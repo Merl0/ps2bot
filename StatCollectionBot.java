@@ -97,7 +97,14 @@ public class StatCollectionBot extends ListenerAdapter {
 
 		//link kill handler
 		bot.getListenerManager().addListener(new KillCollectionHandler(kce, kct, props));
+		
+		//set up vehicle deaths engine
+		VehicleCollectionEngine vce = new VehicleCollectionEngine(bot, props);
+		Thread vct = new Thread(vce, "vct");
+		vct.start();
 
+		//link vehicle death handler
+		bot.getListenerManager().addListener(new VehicleCollectionHandler(vce, vct, props));
 
 		//set up playtime engine
 		PlaytimeCollectionEngine pce = new PlaytimeCollectionEngine(bot, props);

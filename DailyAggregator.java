@@ -41,6 +41,11 @@ public class DailyAggregator {
 			stmt.registerOutParameter(2,Types.INTEGER);
 			System.out.println("Executing procedure.");
 			boolean hadResults = stmt.execute();
+			if (hadResults == true) {
+			System.out.println("It worked!");
+			} else {
+			System.out.println("It didn't :(");
+			}
 			System.out.println("FOr the sake of argument - "+stmt.getInt(1)+" "+stmt.getInt(2));
 			returner.put("deletedRows", stmt.getInt(1));
 			returner.put("elapsedSeconds", stmt.getInt(2));

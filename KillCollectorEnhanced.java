@@ -31,11 +31,15 @@ public class KillCollectorEnhanced {
 		Long startingTimestampNumber = ((System.currentTimeMillis()/1000L)-90L);
 		String startingTimestamp = startingTimestampNumber.toString();
 
+		// http://census.soe.com/s:Merl0n/xml/get/ps2:v2/event?type=KILL&c:limit=10&c:join=type:character^on:attacker_character_id^to:character_id^show:faction_id'battle_rank.value
+
+		// NEW KILL STRING
+		// http://census.soe.com/s:Merl0n/xml/get/ps2:v2/event?type=KILL&c:limit=10&c:join=type:character^on:attacker_character_id^to:character_id^show:faction_id'battle_rank.value&c:join=type:character^on:character_id^to:character_id^show:faction_id'battle_rank.value
 
 		if (soeapikey == null || soeapikey.equals("")) {
 			querystring = "http://census.soe.com/xml/get/ps2:v2/event?type=KILL&after="+startingTimestamp+"&c:limit=1000&c:join=type:character^on:attacker_character_id^to:character_id^show:faction_id'battle_rank.value";
 		} else {
-			querystring = "http://census.soe.com/s:"+soeapikey+"/xml/get/ps2:v2/event?type=KILL&after="+startingTimestamp+"&c:limit=1000&c:join=type:character^on:attacker_character_id^to:character_id^show:faction_id'battle_rank.value";
+			querystring = "http://census.soe.com/s:"+soeapikey+"/xml/get/ps2:v2/event?type=KILL&after="+startingTimestamp+"&c:limit=1000&c:join=type:character^on:attacker_character_id^to:character_id^show:faction_id'battle_rank.value&c:join=type:character^on:character_id^to:character_id^show:faction_id'battle_rank.value";
 		}
 		System.out.println("running "+ querystring);
 		try {
@@ -64,7 +68,7 @@ public class KillCollectorEnhanced {
 		PreparedStatement pstmt = null;
 		ResultSet rs = null;
 		String insertString = "insert into v2_kills (attacker_character_id, attacker_vehicle_id, attacker_weapon_id, character_id, is_critical, is_headshot, "+
-			"timestamp, world_id, zone_id, faction_id, br_value) values (?,?,?,?,?,?,?,?,?,?,?)";
+			"timestamp, world_id, zone_id, attacker_faction_id, attacker_br_value, faction_id, br_value) values (?,?,?,?,?,?,?,?,?,?,?,?,?)";
 		String logString = "insert into v2_api_pulls (timestamp, dupes, first_timestamp_pulled, last_timestamp_pulled, write_time, `interval`) values (?, ?, ?, ?, ?, ?)";
 
 		String dbServer = props.getProperty("db_server");
@@ -86,6 +90,8 @@ public class KillCollectorEnhanced {
 			pstmt = conn.prepareStatement(insertString);
                         for (int i=0;i<killEventsSize;i++) {
                         
+				// System.out.println(killEvents.get(i));				
+
                         	long attacker_character_id = Long.parseLong(killEvents.get(i).attr("attacker_character_id"));
                                 pstmt.setLong(1,attacker_character_id);
                                 int attacker_vehicle_id = Integer.parseInt(killEvents.get(i).attr("attacker_vehicle_id"));
@@ -105,21 +111,86 @@ public class KillCollectorEnhanced {
                                 int zone_id = Integer.parseInt(killEvents.get(i).attr("zone_id"));
                                 pstmt.setInt(9,zone_id);
                                 
-				//values that might not exist
+				int attacker_faction_id=-1;
+				int attacker_br_value=-1;
 				int faction_id=-1;
-				if (killEvents.get(i).childNodeSize()>0) {
-					faction_id = Integer.parseInt(killEvents.get(i).childNode(0).attr("faction_id"));
-				}
-                                pstmt.setInt(10,faction_id);
-                                
 				int br_value=-1;
+
+				// for first case of 2 nodes
+				if (killEvents.get(i).childNodeSize()==2) {
+					attacker_faction_id = Integer.parseInt(killEvents.get(i).childNode(0).attr("faction_id"));
+					attacker_br_value = Integer.parseInt(killEvents.get(i).childNode(0).childNode(0).attr("value"));
+					faction_id = Integer.parseInt(killEvents.get(i).childNode(1).attr("faction_id"));
+					br_value = Integer.parseInt(killEvents.get(i).childNode(1).childNode(0).attr("value"));
+				}
+				
+				String tag = "";
+
+				if (killEvents.get(i).childNodeSize()>0) {
+					tag = killEvents.get(i).childNode(0).nodeName();
+				}
+
+				
+				// System.out.println(tag);	
+
+				String test1 = "attacker_character_id_join_character";
+				String test2 = "character_id_join_character";
+				
+
+				// for second case of 1 node and attacker is saved and destroyed not reporting br value
+				if (killEvents.get(i).childNodeSize()==1 && tag.equals(test1)) {
+					attacker_faction_id = Integer.parseInt(killEvents.get(i).childNode(0).attr("faction_id"));
+					attacker_br_value = Integer.parseInt(killEvents.get(i).childNode(0).childNode(0).attr("value"));	
+					// System.out.println(test1);
+				}
+				
+				
+				
+				// if (killEvents.get(i).childNodeSize()==1 && killEvents.get(i).childNode(0).hasAttr("character_id_join_character")==true) {
+				if (killEvents.get(i).childNodeSize()==1 && tag.equals(test2)) {
+					faction_id = Integer.parseInt(killEvents.get(i).childNode(0).attr("faction_id"));
+					br_value = Integer.parseInt(killEvents.get(i).childNode(0).childNode(0).attr("value"));	
+					// System.out.println(test1);
+				}
+
+				pstmt.setInt(10,attacker_faction_id);				
+				pstmt.setInt(11,attacker_br_value);
+				pstmt.setInt(12,faction_id);
+				pstmt.setInt(13,br_value);
+
+				/*
+				//values that might not exist
+				int attacker_faction_id=-1;
+				if (killEvents.get(i).childNodeSize()>0) {
+					attacker_faction_id = Integer.parseInt(killEvents.get(i).childNode(0).attr("faction_id"));
+				}
+                                pstmt.setInt(10,attacker_faction_id);
+                                
+				int attacker_br_value=-1;
 				if (killEvents.get(i).childNodeSize()>0) {
 					if (killEvents.get(i).childNode(0).childNodeSize()>0) {
-						br_value = Integer.parseInt(killEvents.get(i).childNode(0).childNode(0).attr("value"));
+						attacker_br_value = Integer.parseInt(killEvents.get(i).childNode(0).childNode(0).attr("value"));
 					}
 				}
-                                pstmt.setInt(11,br_value);
-                                //
+                                pstmt.setInt(11,attacker_br_value);
+                                
+				int faction_id=-1;
+				if (killEvents.get(i).childNodeSize()>1) {
+					faction_id = Integer.parseInt(killEvents.get(i).childNode(1).attr("faction_id"));
+				}
+                                pstmt.setInt(12,faction_id);
+                                
+				int br_value=-1;
+				if (killEvents.get(i).childNodeSize()>1) {
+					if (killEvents.get(i).childNode(1).childNodeSize()>0) {
+						br_value = Integer.parseInt(killEvents.get(i).childNode(1).childNode(0).attr("value"));
+					}
+				}
+                                pstmt.setInt(13,br_value);
+				*/
+				
+				
+
 				pstmt.addBatch();
                                 if (timestamp < minTimestamp) {
                                         minTimestamp = timestamp;
